@@ -197,7 +197,8 @@ input:focus {
 
 .primary-action,
 .secondary-action,
-.icon-action {
+.icon-action,
+.share-action {
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -206,6 +207,10 @@ input:focus {
   border-radius: 8px;
   font-weight: 900;
   cursor: pointer;
+}
+
+.primary-action.full {
+  width: 100%;
 }
 
 .primary-action {
@@ -219,7 +224,8 @@ input:focus {
 
 .primary-action:not(:disabled):active,
 .secondary-action:not(:disabled):active,
-.icon-action:not(:disabled):active {
+.icon-action:not(:disabled):active,
+.share-action:not(:disabled):active {
   transform: translateY(1px) scale(0.99);
 }
 
@@ -237,7 +243,8 @@ input:focus {
 }
 
 .secondary-action:not(:disabled):hover,
-.icon-action:not(:disabled):hover {
+.icon-action:not(:disabled):hover,
+.share-action:not(:disabled):hover {
   filter: brightness(0.98) saturate(1.08);
 }
 
@@ -250,6 +257,91 @@ input:focus {
   min-height: 42px;
   background: #1a756f;
   color: #fffaf0;
+}
+
+.share-action {
+  min-height: 42px;
+  padding: 0 12px;
+  background: #1a756f;
+  color: #fffaf0;
+  white-space: nowrap;
+}
+
+.setup-card {
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  border: 1px solid rgba(23, 20, 18, 0.1);
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.setup-card::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent 0%,
+    rgba(26, 117, 113, 0.11) 42%,
+    rgba(243, 207, 95, 0.16) 52%,
+    transparent 64%
+  );
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-120%);
+}
+
+.setup-card[data-busy="true"]::before {
+  animation: panel-sweep 920ms ease infinite;
+  opacity: 1;
+}
+
+.setup-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  padding: 4px;
+  border-radius: 8px;
+  background: rgba(23, 20, 18, 0.06);
+}
+
+.setup-tab {
+  min-height: 38px;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(23, 20, 18, 0.62);
+  font-weight: 900;
+  cursor: pointer;
+  transition:
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.setup-tab[data-active="true"] {
+  background: #171412;
+  color: #fffaf0;
+  box-shadow: 0 8px 18px rgba(23, 20, 18, 0.16);
+}
+
+.setup-submit {
+  min-height: 50px;
+  position: relative;
+  overflow: hidden;
+}
+
+.setup-submit:not(:disabled)::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent, rgba(255, 250, 240, 0.24), transparent);
+  content: "";
+  transform: translateX(-120%);
+  animation: button-sheen 2400ms ease-in-out infinite;
+}
+
+.spin-icon {
+  animation: spin 900ms linear infinite;
 }
 
 .share-panel {
@@ -347,6 +439,40 @@ input:focus {
   transform: translateZ(0);
 }
 
+.camera-stage::before,
+.camera-stage::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  z-index: 1;
+}
+
+.camera-stage::before {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(243, 207, 95, 0.22) 48%,
+    rgba(26, 117, 113, 0.14) 52%,
+    transparent 100%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  transform: translateY(-100%);
+  animation: camera-scan 3200ms linear infinite;
+}
+
+.camera-stage::after {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 250, 240, 0.08) 0,
+    rgba(255, 250, 240, 0.08) 1px,
+    transparent 1px,
+    transparent 42px
+  );
+  opacity: 0.2;
+}
+
 .camera-feed {
   width: 100%;
   height: 100%;
@@ -362,6 +488,7 @@ input:focus {
   display: grid;
   place-items: center;
   pointer-events: none;
+  z-index: 2;
 }
 
 .scan-frame {
@@ -398,6 +525,9 @@ input:focus {
 .countdown[data-active="true"] {
   opacity: 1;
   animation: countdown-pop 520ms cubic-bezier(0.2, 1.25, 0.3, 1) both;
+  box-shadow:
+    0 0 0 12px rgba(243, 207, 95, 0.18),
+    0 18px 44px rgba(0, 0, 0, 0.28);
 }
 
 .countdown span {
@@ -424,6 +554,7 @@ input:focus {
   position: absolute;
   left: 14px;
   bottom: 14px;
+  z-index: 3;
   max-width: calc(100% - 28px);
   background: rgba(255, 250, 240, 0.88);
 }
@@ -547,6 +678,7 @@ input:focus {
   background: #18846f;
   color: #fffaf0;
   transform: scale(1.02);
+  animation: ready-pulse 1200ms ease-in-out infinite;
 }
 
 .live-badge {
@@ -583,7 +715,9 @@ input:focus {
 
 .result-board {
   border-color: rgba(181, 70, 53, 0.22);
-  background: #ffe7df;
+  background:
+    linear-gradient(120deg, rgba(243, 207, 95, 0.35), transparent 34%),
+    #ffe7df;
   animation: result-pop 420ms cubic-bezier(0.2, 1.2, 0.28, 1) both;
 }
 
@@ -671,11 +805,19 @@ input:focus {
   }
 
   .share-panel {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr;
   }
 
   .share-panel img {
-    display: none;
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 180px;
+    object-fit: contain;
+  }
+
+  .share-action {
+    width: 100%;
   }
 
   .camera-stage,
@@ -721,6 +863,34 @@ input:focus {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes panel-sweep {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes button-sheen {
+  0%,
+  46% {
+    transform: translateX(-120%);
+  }
+
+  72%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes camera-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+
+  100% {
+    transform: translateY(100%);
   }
 }
 
@@ -770,6 +940,17 @@ input:focus {
   100% {
     opacity: 0;
     transform: scale(1.08);
+  }
+}
+
+@keyframes ready-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(24, 132, 111, 0.28);
+  }
+
+  50% {
+    box-shadow: 0 0 0 7px rgba(24, 132, 111, 0);
   }
 }
 

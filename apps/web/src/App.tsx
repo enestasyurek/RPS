@@ -29,13 +29,16 @@ import { useHandTracker } from "./hooks/useHandTracker";
 const socket = createGameSocket();
 
 type Toast = { tone: "error" | "info"; message: string } | undefined;
+type SetupMode = "create" | "join";
+type RoomAction = SetupMode | undefined;
 
 export default function App() {
   const tracker = useHandTracker();
+  const initialRoomCode = normalizeRoomInput(new URLSearchParams(location.search).get("room") ?? "");
   const [displayName, setDisplayName] = useState(() => localStorage.getItem("rps:name") ?? "");
-  const [joinCode, setJoinCode] = useState(() =>
-    normalizeRoomInput(new URLSearchParams(location.search).get("room") ?? "")
-  );
+  const [joinCode, setJoinCode] = useState(() => initialRoomCode);
+  const [setupMode, setSetupMode] = useState<SetupMode>(() => (initialRoomCode ? "join" : "create"));
+  const [roomAction, setRoomAction] = useState<RoomAction>();
   const [room, setRoom] = useState<RoomStatePayload>();
   const [round, setRound] = useState<RoundCountdownPayload>();
   const [result, setResult] = useState<RoundResultPayload>();
@@ -51,10 +54,15 @@ export default function App() {
 
   useEffect(() => {
     const handleConnect = () => setConnected(true);
-    const handleDisconnect = () => setConnected(false);
+    const handleDisconnect = () => {
+      setConnected(false);
+      setRoomAction(undefined);
+    };
     const handleRoomState = (payload: RoomStatePayload) => {
       setRoom(payload);
       setJoinCode(payload.roomCode);
+      setSetupMode("join");
+      setRoomAction(undefined);
       syncRoomCodeInUrl(payload.roomCode);
       setToast(undefined);
     };
@@ -69,6 +77,7 @@ export default function App() {
       setCaptureLabel("Ready");
     };
     const handleError = (payload: RoomErrorPayload) => {
+      setRoomAction(undefined);
       setToast({ tone: "error", message: payload.message });
     };
 
@@ -138,12 +147,22 @@ export default function App() {
   }
 
   function createRoom() {
+    if (roomAction) {
+      return;
+    }
+
     persistName();
+    setRoomAction("create");
     socket.emit("room:create", { displayName });
   }
 
   function joinRoom() {
+    if (roomAction) {
+      return;
+    }
+
     persistName();
+    setRoomAction("join");
     socket.emit("room:join", { roomCode: normalizeRoomInput(joinCode), displayName });
   }
 
@@ -153,6 +172,8 @@ export default function App() {
     setRound(undefined);
     setResult(undefined);
     setSubmittedMove(undefined);
+    setRoomAction(undefined);
+    setSetupMode("create");
     syncRoomCodeInUrl(undefined);
   }
 
@@ -184,9 +205,13 @@ export default function App() {
           <NameAndRoom
             displayName={displayName}
             joinCode={joinCode}
+            mode={setupMode}
             room={room}
+            pendingAction={roomAction}
+            connected={connected}
             onDisplayName={setDisplayName}
             onJoinCode={(value) => setJoinCode(normalizeRoomInput(value))}
+            onMode={setSetupMode}
             onCreate={createRoom}
             onJoin={joinRoom}
             onLeave={leaveRoom}
@@ -204,7 +229,7 @@ export default function App() {
           )}
         </aside>
 
-        <section className="arena" aria-label="Camera arena">
+        <section className="arena" data-phase={room?.phase ?? "idle"} aria-label="Camera arena">
           <div className="camera-stage">
             <video ref={tracker.videoRef} className="camera-feed" playsInline muted />
             <div className="camera-overlay">
@@ -260,27 +285,61 @@ export default function App() {
 function NameAndRoom({
   displayName,
   joinCode,
+  mode,
   room,
+  pendingAction,
+  connected,
   onDisplayName,
   onJoinCode,
+  onMode,
   onCreate,
   onJoin,
   onLeave
 }: {
   displayName: string;
   joinCode: string;
+  mode: SetupMode;
   room: RoomStatePayload | undefined;
+  pendingAction: RoomAction;
+  connected: boolean;
   onDisplayName: (value: string) => void;
   onJoinCode: (value: string) => void;
+  onMode: (mode: SetupMode) => void;
   onCreate: () => void;
   onJoin: () => void;
   onLeave: () => void;
 }) {
   const canSubmit = displayName.trim().length > 0;
-  const hasJoinCode = joinCode.trim().length > 0;
+  const hasJoinCode = joinCode.trim().length === 5;
+  const busy = Boolean(pendingAction);
+  const canCreate = canSubmit && connected && !busy;
+  const canJoin = canSubmit && hasJoinCode && connected && !busy;
 
   return (
-    <div className="panel-block">
+    <div className="panel-block setup-card" data-busy={busy}>
+      {!room ? (
+        <div className="setup-tabs" aria-label="Room setup mode">
+          <button
+            type="button"
+            className="setup-tab"
+            data-active={mode === "create"}
+            disabled={busy}
+            onClick={() => onMode("create")}
+          >
+            Create
+          </button>
+          <button
+            type="button"
+            className="setup-tab"
+            data-active={mode === "join"}
+            disabled={busy}
+            onClick={() => onMode("join")}
+          >
+            Join
+          </button>
+        </div>
+      ) : null}
+
       <label>
         <span>Name</span>
         <input
@@ -292,44 +351,36 @@ function NameAndRoom({
         />
       </label>
 
-      <label>
-        <span>Room code</span>
-        <input
-          value={joinCode}
-          maxLength={5}
-          disabled={Boolean(room)}
-          onChange={(event) => onJoinCode(event.target.value.toUpperCase())}
-          placeholder="A7K2P"
-        />
-      </label>
+      {!room && mode === "join" ? (
+        <label>
+          <span>Room code</span>
+          <input
+            value={joinCode}
+            maxLength={5}
+            inputMode="text"
+            autoCapitalize="characters"
+            disabled={busy}
+            onChange={(event) => onJoinCode(event.target.value)}
+            placeholder="A7K2P"
+          />
+        </label>
+      ) : null}
 
       {room ? (
         <button className="secondary-action full" onClick={onLeave}>
           <DoorOpen size={18} />
           Leave room
         </button>
-      ) : hasJoinCode ? (
-        <div className="button-grid">
-          <button className="primary-action" disabled={!canSubmit} onClick={onJoin}>
-            <Link size={18} />
-            Join room
-          </button>
-          <button className="secondary-action" disabled={!canSubmit} onClick={onCreate}>
-            <Users size={18} />
-            New room
-          </button>
-        </div>
+      ) : mode === "join" ? (
+        <button className="primary-action full setup-submit" disabled={!canJoin} onClick={onJoin}>
+          {pendingAction === "join" ? <LoaderCircle className="spin-icon" size={18} /> : <Link size={18} />}
+          {pendingAction === "join" ? "Joining" : "Join room"}
+        </button>
       ) : (
-        <div className="button-grid">
-          <button className="primary-action" disabled={!canSubmit} onClick={onCreate}>
-            <Users size={18} />
-            Create
-          </button>
-          <button className="secondary-action" disabled={!canSubmit || !joinCode} onClick={onJoin}>
-            <Link size={18} />
-            Join
-          </button>
-        </div>
+        <button className="primary-action full setup-submit" disabled={!canCreate} onClick={onCreate}>
+          {pendingAction === "create" ? <LoaderCircle className="spin-icon" size={18} /> : <Users size={18} />}
+          {pendingAction === "create" ? "Creating" : "Create room"}
+        </button>
       )}
     </div>
   );
@@ -337,6 +388,7 @@ function NameAndRoom({
 
 function RoomShare({ roomCode }: { roomCode: string }) {
   const [qr, setQr] = useState<string>();
+  const [copied, setCopied] = useState(false);
   const shareUrl = useMemo(() => {
     const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set("room", roomCode);
@@ -356,6 +408,8 @@ function RoomShare({ roomCode }: { roomCode: string }) {
 
   async function copyLink() {
     await navigator.clipboard?.writeText(shareUrl);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1400);
   }
 
   return (
@@ -365,17 +419,19 @@ function RoomShare({ roomCode }: { roomCode: string }) {
         <strong>{roomCode}</strong>
       </div>
       {qr ? <img src={qr} alt={`QR code for room ${roomCode}`} /> : null}
-      <button className="icon-action" onClick={copyLink} aria-label="Copy room link" title="Copy link">
-        <Clipboard size={18} />
+      <button className="share-action" onClick={copyLink} aria-label="Copy room link" title="Copy link">
+        {copied ? <Check size={18} /> : <Clipboard size={18} />}
+        <span>{copied ? "Copied" : "Copy"}</span>
       </button>
       {"share" in navigator ? (
         <button
-          className="icon-action"
+          className="share-action"
           onClick={() => navigator.share({ title: "RPS Camera Duel", url: shareUrl })}
           aria-label="Share room link"
           title="Share"
         >
           <Share2 size={18} />
+          <span>Share</span>
         </button>
       ) : null}
     </div>

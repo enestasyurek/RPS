@@ -69,6 +69,12 @@ io.on("connection", (socket) => {
   socket.on("room:create", (payload) => {
     runSafely(socket, () => {
       const displayName = requireDisplayName(payload.displayName);
+
+      if (socket.data.roomCode && store.getRoom(socket.data.roomCode)) {
+        emitRoomState(socket.data.roomCode);
+        return;
+      }
+
       leaveCurrentRoom(socket, false);
 
       const { room, player } = store.createRoom(socket.id, displayName);
@@ -87,6 +93,11 @@ io.on("connection", (socket) => {
 
       if (!roomCode) {
         throw new RoomStoreError("BAD_REQUEST", "Enter a room code.");
+      }
+
+      if (socket.data.roomCode === roomCode && store.getRoom(roomCode)) {
+        emitRoomState(roomCode);
+        return;
       }
 
       leaveCurrentRoom(socket, false);
