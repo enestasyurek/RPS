@@ -31,7 +31,9 @@ type Toast = { tone: "error" | "info"; message: string } | undefined;
 export default function App() {
   const tracker = useHandTracker();
   const [displayName, setDisplayName] = useState(() => localStorage.getItem("rps:name") ?? "");
-  const [joinCode, setJoinCode] = useState(() => new URLSearchParams(location.search).get("room") ?? "");
+  const [joinCode, setJoinCode] = useState(() =>
+    normalizeRoomInput(new URLSearchParams(location.search).get("room") ?? "")
+  );
   const [room, setRoom] = useState<RoomStatePayload>();
   const [round, setRound] = useState<RoundCountdownPayload>();
   const [result, setResult] = useState<RoundResultPayload>();
@@ -51,6 +53,7 @@ export default function App() {
     const handleRoomState = (payload: RoomStatePayload) => {
       setRoom(payload);
       setJoinCode(payload.roomCode);
+      syncRoomCodeInUrl(payload.roomCode);
       setToast(undefined);
     };
     const handleCountdown = (payload: RoundCountdownPayload) => {
@@ -138,7 +141,7 @@ export default function App() {
 
   function joinRoom() {
     persistName();
-    socket.emit("room:join", { roomCode: joinCode, displayName });
+    socket.emit("room:join", { roomCode: normalizeRoomInput(joinCode), displayName });
   }
 
   function leaveRoom() {
@@ -147,6 +150,7 @@ export default function App() {
     setRound(undefined);
     setResult(undefined);
     setSubmittedMove(undefined);
+    syncRoomCodeInUrl(undefined);
   }
 
   function toggleReady() {
@@ -179,7 +183,7 @@ export default function App() {
             joinCode={joinCode}
             room={room}
             onDisplayName={setDisplayName}
-            onJoinCode={setJoinCode}
+            onJoinCode={(value) => setJoinCode(normalizeRoomInput(value))}
             onCreate={createRoom}
             onJoin={joinRoom}
             onLeave={leaveRoom}
@@ -279,6 +283,7 @@ function NameAndRoom({
   onLeave: () => void;
 }) {
   const canSubmit = displayName.trim().length > 0;
+  const hasJoinCode = joinCode.trim().length > 0;
 
   return (
     <div className="panel-block">
@@ -309,6 +314,17 @@ function NameAndRoom({
           <DoorOpen size={18} />
           Leave room
         </button>
+      ) : hasJoinCode ? (
+        <div className="button-grid">
+          <button className="primary-action" disabled={!canSubmit} onClick={onJoin}>
+            <Link size={18} />
+            Join room
+          </button>
+          <button className="secondary-action" disabled={!canSubmit} onClick={onCreate}>
+            <Users size={18} />
+            New room
+          </button>
+        </div>
       ) : (
         <div className="button-grid">
           <button className="primary-action" disabled={!canSubmit} onClick={onCreate}>
@@ -328,7 +344,7 @@ function NameAndRoom({
 function RoomShare({ roomCode }: { roomCode: string }) {
   const [qr, setQr] = useState<string>();
   const shareUrl = useMemo(() => {
-    const url = new URL(window.location.href);
+    const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set("room", roomCode);
     return url.toString();
   }, [roomCode]);
@@ -503,4 +519,20 @@ function getTrackerStatusText(status: string, cameraReady: boolean, modelReady: 
   }
 
   return "Preparing camera";
+}
+
+function normalizeRoomInput(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
+}
+
+function syncRoomCodeInUrl(roomCode: string | undefined) {
+  const url = new URL(window.location.href);
+
+  if (roomCode) {
+    url.searchParams.set("room", roomCode);
+  } else {
+    url.searchParams.delete("room");
+  }
+
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }

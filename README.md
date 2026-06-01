@@ -20,6 +20,46 @@ If Vite chooses a different port, use the URL printed by `npm run dev`. For a se
 
 The camera API requires a secure context in production, so deploy behind HTTPS. This MVP stores rooms in server memory; a server restart clears active rooms. Set `CLIENT_ORIGIN` to the production web origin instead of `*` when deploying.
 
+## Free Pinggy Tunnel
+
+Use this when you do not have a domain and want to publish the game through your Oracle server or any Ubuntu machine with an SSH tunnel.
+
+Build the production app first:
+
+```bash
+cd ~/RPS
+npm ci
+npm run build
+```
+
+Start the app on local port `5000`:
+
+```bash
+npm run start:pinggy
+```
+
+In a second terminal, start the Pinggy tunnel:
+
+```bash
+ssh -p 443 -R 80:localhost:5000 free.pinggy.io
+```
+
+Pinggy will print a public HTTPS URL. Open that URL on both phones/computers.
+
+Joining flow:
+
+1. Player 1 opens the Pinggy HTTPS URL and creates a room.
+2. Player 1 copies or shares the room link from the Room panel.
+3. Player 2 opens that exact shared link.
+4. When the URL contains `?room=ABCDE`, the main button becomes `Join room` instead of `Create`, so Player 2 does not accidentally create a new room.
+
+Important notes:
+
+- Keep the Node app and the Pinggy SSH tunnel running while playing.
+- Active rooms live in memory, so restarting `npm run start:pinggy` creates a fresh room store.
+- Free Pinggy URLs can change when you reconnect the tunnel. Create/share a new room link after each tunnel restart.
+- Do not use Vite dev server for phone testing here; use the production build and `npm run start:pinggy`.
+
 ## Free Oracle VPS Deploy Without Buying a Domain
 
 You can publish this on an Oracle Free Tier VM without buying a domain by using a free wildcard DNS hostname from `nip.io`.
