@@ -1,0 +1,24 @@
+{
+  "name": "rps-camera-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22 <25",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @rps/shared && concurrently -n server,web -c green,cyan \"npm run dev -w @rps/server\" \"npm run dev -w @rps/web\"",
+    "build": "npm run build -w @rps/shared && npm run build -w @rps/server && npm run build -w @rps/web",
+    "test": "npm run build -w @rps/shared && npm run test -w @rps/server && npm run test -w @rps/web",
+    "start": "npm run start -w @rps/server"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.1",
+    "typescript": "^6.0.3"
+  }
+}
