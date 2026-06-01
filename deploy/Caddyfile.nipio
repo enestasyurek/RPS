@@ -1,0 +1,9 @@
+# Replace the hostname below with your Oracle public IP in dash notation.
+# Example public IP: 129.159.12.34
+# Example hostname: rps-129-159-12-34.nip.io
+
+rps-<PUBLIC-IP-DASH>.nip.io {
+  encode zstd gzip
+  reverse_proxy 127.0.0.1:4000
+}
+

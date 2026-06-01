@@ -1,0 +1,17 @@
+[Unit]
+Description=Camera Rock Paper Scissors MVP
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/rps-camera-mvp
+EnvironmentFile=/etc/rps-camera-mvp.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+User=rps
+Group=rps
+
+[Install]
+WantedBy=multi-user.target
+
