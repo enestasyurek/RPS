@@ -5,8 +5,10 @@ import {
   Clipboard,
   DoorOpen,
   Link,
+  Hand,
   LoaderCircle,
   RefreshCcw,
+  Sparkles,
   Share2,
   Trophy,
   Users,
@@ -129,6 +131,7 @@ export default function App() {
   const opponent = room?.players.find((player) => player.id !== room.selfId);
   const canReady = Boolean(room && tracker.cameraReady && tracker.modelReady && room.phase !== "countdown");
   const statusText = getTrackerStatusText(tracker.status, tracker.cameraReady, tracker.modelReady);
+  const selfMove = result?.moves.find((move) => move.playerId === room?.selfId);
 
   function persistName() {
     localStorage.setItem("rps:name", displayName.trim());
@@ -206,8 +209,9 @@ export default function App() {
             <video ref={tracker.videoRef} className="camera-feed" playsInline muted />
             <div className="camera-overlay">
               <div className="scan-frame" />
-              <div className="countdown" data-active={Boolean(round)}>
-                {captureLabel}
+              <div className="pulse-ring" data-active={room?.phase === "countdown"} />
+              <div className="countdown" data-active={Boolean(round)} key={captureLabel}>
+                <span>{captureLabel}</span>
               </div>
             </div>
             <div className="camera-status">
@@ -228,27 +232,17 @@ export default function App() {
             ))}
           </div>
 
-          <div className="action-row">
-            {room ? (
-              <>
-                <button className="primary-action" disabled={!canReady} onClick={toggleReady}>
-                  {self?.ready ? <Check size={20} /> : <Camera size={20} />}
-                  {self?.ready ? "Ready" : "Ready up"}
-                </button>
-                {result ? (
-                  <button className="secondary-action" onClick={() => socket.emit("round:rematch")}>
-                    <RefreshCcw size={19} />
-                    Play again
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <div className="join-hint">
-                <Link size={18} />
-                <span>Join or create a room to start the match.</span>
-              </div>
-            )}
-          </div>
+          <RoundControls
+            room={room}
+            selfReady={Boolean(self?.ready)}
+            opponentReady={Boolean(opponent?.ready)}
+            canReady={canReady}
+            hasOpponent={Boolean(opponent)}
+            result={result}
+            selfMove={selfMove?.move}
+            onReady={toggleReady}
+            onRematch={() => socket.emit("round:rematch")}
+          />
 
           <MatchStatus
             room={room}
@@ -416,6 +410,89 @@ function ScorePanel({
   );
 }
 
+function RoundControls({
+  room,
+  selfReady,
+  opponentReady,
+  canReady,
+  hasOpponent,
+  result,
+  selfMove,
+  onReady,
+  onRematch
+}: {
+  room: RoomStatePayload | undefined;
+  selfReady: boolean;
+  opponentReady: boolean;
+  canReady: boolean;
+  hasOpponent: boolean;
+  result: RoundResultPayload | undefined;
+  selfMove: Move | undefined;
+  onReady: () => void;
+  onRematch: () => void;
+}) {
+  if (!room) {
+    return (
+      <div className="round-panel">
+        <div className="join-hint">
+          <Link size={18} />
+          <span>Join or create a room to start the match.</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (result) {
+    return (
+      <div className="round-panel rematch-panel">
+        <div>
+          <p className="eyebrow">Next round</p>
+          <strong>{selfReady ? "Rematch armed" : "Play another one?"}</strong>
+          <span>{selfReady ? "Waiting for your opponent." : "Lock in when you are ready."}</span>
+        </div>
+        <button className="primary-action ready-action" disabled={!canReady || selfReady} onClick={onRematch}>
+          {selfReady ? <Check size={20} /> : <RefreshCcw size={20} />}
+          {selfReady ? "Ready again" : "Play again"}
+        </button>
+      </div>
+    );
+  }
+
+  if (room.phase === "countdown") {
+    return (
+      <div className="round-panel live-panel">
+        <div>
+          <p className="eyebrow">Live round</p>
+          <strong>{selfMove ? `${MOVE_LABELS[selfMove]} locked` : "Hold your move"}</strong>
+          <span>Keep your hand inside the frame until Shoot.</span>
+        </div>
+        <div className="live-badge">
+          <LoaderCircle size={19} />
+          Capturing
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="round-panel ready-panel">
+      <div>
+        <p className="eyebrow">Round setup</p>
+        <strong>{selfReady ? "You are ready" : "Ready when you are"}</strong>
+        <span>{getReadyHint(hasOpponent, selfReady, opponentReady)}</span>
+      </div>
+      <button className="primary-action ready-action" disabled={!canReady || !hasOpponent} onClick={onReady}>
+        {selfReady ? <Check size={20} /> : <Hand size={20} />}
+        {selfReady ? "Cancel ready" : "Ready up"}
+      </button>
+      <div className="ready-dots" aria-label="Player ready state">
+        <span data-active={selfReady}>You</span>
+        <span data-active={opponentReady}>Opponent</span>
+      </div>
+    </div>
+  );
+}
+
 function MatchStatus({
   room,
   selfName,
@@ -455,7 +532,10 @@ function MatchStatus({
 
     return (
       <div className="status-board result-board">
-        <h2>{winnerName}</h2>
+        <div className="result-burst">
+          <Sparkles size={20} />
+          <h2>{winnerName}</h2>
+        </div>
         <div className="result-moves">
           {result.moves.map((move) => (
             <div key={move.playerId}>
@@ -519,6 +599,26 @@ function getTrackerStatusText(status: string, cameraReady: boolean, modelReady: 
   }
 
   return "Preparing camera";
+}
+
+function getReadyHint(hasOpponent: boolean, selfReady: boolean, opponentReady: boolean) {
+  if (!hasOpponent) {
+    return "Waiting for the second player.";
+  }
+
+  if (selfReady && opponentReady) {
+    return "Both players are ready.";
+  }
+
+  if (selfReady) {
+    return "Waiting for your opponent.";
+  }
+
+  if (opponentReady) {
+    return "Opponent is ready.";
+  }
+
+  return "Both players need to lock in.";
 }
 
 function normalizeRoomInput(value: string): string {

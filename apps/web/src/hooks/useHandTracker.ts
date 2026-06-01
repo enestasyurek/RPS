@@ -28,6 +28,8 @@ export function useHandTracker(): HandTrackerState {
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const latestRef = useRef<GesturePrediction>(classifyHandLandmarks(undefined));
   const lastUiUpdateRef = useRef(0);
+  const lastDetectionRef = useRef(0);
+  const targetFrameInterval = getTargetFrameInterval();
   const [status, setStatus] = useState<TrackerStatus>("loading");
   const [cameraReady, setCameraReady] = useState(false);
   const [modelReady, setModelReady] = useState(false);
@@ -49,8 +51,9 @@ export function useHandTracker(): HandTrackerState {
           audio: false,
           video: {
             facingMode: "user",
-            width: { ideal: 640 },
-            height: { ideal: 480 }
+            width: { ideal: prefersMobileCamera() ? 424 : 640 },
+            height: { ideal: prefersMobileCamera() ? 320 : 480 },
+            frameRate: { ideal: prefersMobileCamera() ? 18 : 24, max: prefersMobileCamera() ? 24 : 30 }
           }
         });
 
@@ -81,8 +84,14 @@ export function useHandTracker(): HandTrackerState {
         setStatus("ready");
 
         const loop = () => {
-          const result = detectForVideo();
-          updateLatestPrediction(result);
+          const now = performance.now();
+
+          if (now - lastDetectionRef.current >= targetFrameInterval) {
+            lastDetectionRef.current = now;
+            const result = detectForVideo(now);
+            updateLatestPrediction(result, now);
+          }
+
           frameId = requestAnimationFrame(loop);
         };
 
@@ -105,14 +114,14 @@ export function useHandTracker(): HandTrackerState {
   }, []);
 
   const captureMove = useCallback(() => {
-    const result = detectForVideo();
+    const result = detectForVideo(performance.now());
     const prediction = resultToPrediction(result);
     latestRef.current = prediction;
     setLatestPrediction(prediction);
     return prediction;
   }, []);
 
-  function detectForVideo(): HandLandmarkerResult | undefined {
+  function detectForVideo(timestamp: number): HandLandmarkerResult | undefined {
     const video = videoRef.current;
     const landmarker = landmarkerRef.current;
 
@@ -120,15 +129,15 @@ export function useHandTracker(): HandTrackerState {
       return undefined;
     }
 
-    return landmarker.detectForVideo(video, performance.now());
+    return landmarker.detectForVideo(video, timestamp);
   }
 
-  function updateLatestPrediction(result: HandLandmarkerResult | undefined) {
+  function updateLatestPrediction(result: HandLandmarkerResult | undefined, now: number) {
     const prediction = resultToPrediction(result);
     latestRef.current = prediction;
 
-    if (performance.now() - lastUiUpdateRef.current > 110) {
-      lastUiUpdateRef.current = performance.now();
+    if (now - lastUiUpdateRef.current > 140) {
+      lastUiUpdateRef.current = now;
       setLatestPrediction(prediction);
     }
   }
@@ -172,4 +181,16 @@ async function createHandLandmarker(vision: Awaited<ReturnType<typeof FilesetRes
       }
     });
   }
+}
+
+function prefersMobileCamera(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches))
+  );
+}
+
+function getTargetFrameInterval(): number {
+  return prefersMobileCamera() ? 1000 / 12 : 1000 / 18;
 }
